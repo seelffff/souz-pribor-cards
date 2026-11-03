@@ -12,3 +12,8 @@ fmt:
 	$(PYTHON) -m ruff check --fix .
 
 .PHONY: run lint fmt
+
+eval:
+	$(PYTHON) -m eval.run_eval --runs 5
+
+.PHONY: eval

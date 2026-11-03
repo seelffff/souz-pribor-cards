@@ -64,6 +64,7 @@ class Usage:
     latency_ms: int = 0
     cost_usd: float | None = 0.0
     violation_counts: Counter = field(default_factory=Counter)
+    violations_by_attempt: list[list[str]] = field(default_factory=list)
 
     def add(self, reply: LLMReply) -> None:
         self.calls += 1
@@ -114,6 +115,7 @@ def generate_card(
         draft = new_draft
         violations = validate_draft(draft, source)
         usage.violation_counts.update(v.kind for v in violations)
+        usage.violations_by_attempt.append([str(v) for v in violations])
         if not violations:
             break
         log.info("попытка %d: %s", attempt, "; ".join(map(str, violations)))
@@ -163,6 +165,7 @@ def generate_card(
             tokens=usage.tokens,
             cost_usd=usage.cost_usd,
             violation_counts=dict(usage.violation_counts),
+            violations_by_attempt=usage.violations_by_attempt,
         ),
     )
 

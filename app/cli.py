@@ -1,0 +1,71 @@
+import argparse
+import logging
+import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+from app.generator import generate_card
+from app.llm.base import LLMError, provider_from_env
+from app.models import InputError, ProductInput, parse_product_json
+from app.render import render_markdown
+from app.yml import offer_to_product
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="python -m app", description="Черновик карточки товара")
+    parser.add_argument("-v", "--verbose", action="store_true", help="подробный лог")
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    generate = commands.add_parser("generate", help="карточка по JSON-файлу товара")
+    generate.add_argument("input", type=Path, help="JSON с name, manufacturer, specs, description")
+
+    from_yml = commands.add_parser("from-yml", help="карточка по офферу из YML-фида магазина")
+    from_yml.add_argument("feed", type=Path, help="YML-фид (feed.xml)")
+    from_yml.add_argument("--offer-id", required=True)
+    from_yml.add_argument("--save-input", type=Path, help="сохранить входной JSON оффера")
+
+    for command in (generate, from_yml):
+        command.add_argument("--format", choices=["md", "json"], default="md")
+        command.add_argument("--judge", action="store_true", help="доп. проверка LLM-судьёй")
+        command.add_argument("--out", type=Path, help="записать в файл вместо stdout")
+
+    args = parser.parse_args(argv)
+    load_dotenv()
+    logging.basicConfig(
+        level=logging.INFO if args.verbose else logging.WARNING,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
+    # Строки HTTP-запросов SDK только мешают читать лог нарушений.
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
+
+    try:
+        product = load_product(args)
+        card = generate_card(product, provider_from_env(), judge=args.judge)
+    except OSError as exc:
+        print(f"Не удалось прочитать файл: {exc}", file=sys.stderr)
+        return 2
+    except InputError as exc:
+        print(f"Ошибка входных данных: {exc}", file=sys.stderr)
+        return 2
+    except LLMError as exc:
+        print(f"Ошибка LLM: {exc}", file=sys.stderr)
+        return 1
+
+    output = render_markdown(card) if args.format == "md" else card.model_dump_json(indent=2)
+    if args.out:
+        args.out.write_text(output + "\n", encoding="utf-8")
+    else:
+        print(output)
+    if card.status == "needs_review":
+        print("Карточка требует проверки: см. раздел замечаний.", file=sys.stderr)
+    return 0
+
+
+def load_product(args: argparse.Namespace) -> ProductInput:
+    if args.command == "generate":
+        return parse_product_json(args.input.read_text(encoding="utf-8"))
+    product = offer_to_product(args.feed, args.offer_id)
+    if args.save_input:
+        args.save_input.write_text(product.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    return product

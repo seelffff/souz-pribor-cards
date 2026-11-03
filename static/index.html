@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Черновик карточки КИП</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --text: #1d2330; --muted: #667085; --line: #e3e6eb;
+    --accent: #1f5fbf; --ok: #1d7a46; --warn-bg: #fff6d6; --warn-line: #e9c44a;
+    --err-bg: #fdeaea; --err-line: #e07070;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  header { padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 18px; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: minmax(340px, 1fr) minmax(420px, 1.4fr); gap: 20px;
+    padding: 20px 24px; max-width: 1500px; margin: 0 auto; }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; padding: 16px; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; min-width: 0; }
+  h2 { font-size: 15px; margin: 18px 0 8px; }
+  h2:first-child { margin-top: 0; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+  .tabs button { border: 0; background: none; padding: 8px 12px; cursor: pointer; color: var(--muted);
+    border-bottom: 2px solid transparent; font: inherit; }
+  .tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+  textarea, input[type=text] { width: 100%; font: 13px/1.4 ui-monospace, Menlo, monospace;
+    border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+  #json-input { height: 380px; resize: vertical; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  #form-input input[type=text], #form-input textarea { font-family: inherit; font-size: 14px; }
+  .spec-row { display: grid; grid-template-columns: 1fr 1fr 32px; gap: 6px; margin-bottom: 6px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+  button.primary { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+    padding: 9px 16px; font: inherit; cursor: pointer; }
+  button.primary:disabled { opacity: .6; cursor: wait; }
+  button.small { border: 1px solid var(--line); background: var(--panel); border-radius: 6px;
+    padding: 4px 10px; font-size: 13px; cursor: pointer; }
+  .hidden { display: none; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+  .status.ok { background: #e3f4ea; color: var(--ok); }
+  .status.needs_review { background: var(--warn-bg); color: #8a6400; }
+  .field-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .counter { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .counter.bad { color: #b42318; font-weight: 600; }
+  .text-box { white-space: pre-wrap; border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: #fbfbfc; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { border-bottom: 1px solid var(--line); padding: 6px 4px; text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  td.nodata { color: var(--muted); font-style: italic; }
+  .source { font-size: 11px; color: var(--muted); }
+  .note { border-left: 4px solid; border-radius: 6px; padding: 10px 12px; margin-top: 14px; }
+  .note.warn { background: var(--warn-bg); border-color: var(--warn-line); }
+  .note.err { background: var(--err-bg); border-color: var(--err-line); }
+  .note h3 { margin: 0 0 6px; font-size: 14px; }
+  .note ul { margin: 0; padding-left: 18px; }
+  pre { white-space: pre-wrap; font: 13px/1.45 ui-monospace, Menlo, monospace; background: #fbfbfc;
+    border: 1px solid var(--line); border-radius: 6px; padding: 10px; margin: 0; max-height: 640px; overflow: auto; }
+  #error { margin-top: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Черновик карточки товара КИП</h1>
+  <p>Технические значения берутся только из входных данных; ответ модели проверяется кодом.
+    <span id="health" class="muted"></span></p>
+</header>
+<main>
+  <section>
+    <div class="tabs" id="input-tabs">
+      <button data-tab="json-tab" class="active">JSON</button>
+      <button data-tab="form-tab">Форма</button>
+    </div>
+    <div id="json-tab">
+      <div class="row" style="margin-top:0;margin-bottom:8px">
+        <span class="muted">Примеры:</span>
+        <button class="small" data-example="manometer_dm02.json">DM 02</button>
+        <button class="small" data-example="mp3u_manotom.json">МП3-У</button>
+        <button class="small" data-example="pd100_feed_only.json">ПД100 из фида</button>
+        <button class="small" data-example="injection.json">Ловушка</button>
+      </div>
+      <textarea id="json-input" spellcheck="false"></textarea>
+    </div>
+    <div id="form-tab" class="hidden">
+      <div id="form-input">
+        <label for="f-name">Название *</label><input type="text" id="f-name">
+        <label for="f-manufacturer">Производитель</label><input type="text" id="f-manufacturer">
+        <label>Характеристики</label>
+        <div id="spec-rows"></div>
+        <button class="small" id="add-spec">+ характеристика</button>
+        <label for="f-description">Описание или фрагмент паспорта</label>
+        <textarea id="f-description" rows="5"></textarea>
+      </div>
+    </div>
+    <div class="row">
+      <button class="primary" id="generate">Сгенерировать</button>
+      <label style="margin:0"><input type="checkbox" id="judge"> проверка судьёй (+1 запрос)</label>
+    </div>
+    <div id="error" class="note err hidden"></div>
+  </section>
+
+  <section>
+    <div class="tabs" id="output-tabs">
+      <button data-tab="card-view" class="active">Карточка</button>
+      <button data-tab="md-view">Markdown</button>
+      <button data-tab="json-view">JSON</button>
+    </div>
+    <p id="placeholder" class="muted">Здесь появится черновик карточки.</p>
+    <div id="card-view" class="hidden"></div>
+    <div id="md-view" class="hidden">
+      <div class="row" style="margin:0 0 8px"><button class="small" data-copy="markdown">Копировать</button></div>
+      <pre id="md-output"></pre>
+    </div>
+    <div id="json-view" class="hidden">
+      <div class="row" style="margin:0 0 8px"><button class="small" data-copy="json">Копировать</button></div>
+      <pre id="json-output"></pre>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { inputTab: "json-tab", outputTab: "card-view", result: null };
+
+function el(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined && text !== null) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+
+function setupTabs(containerId, onSwitch) {
+  const container = $(containerId);
+  container.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-tab]");
+    if (!button) return;
+    for (const b of container.querySelectorAll("button")) {
+      b.classList.toggle("active", b === button);
+      $(b.dataset.tab).classList.add("hidden");
+    }
+    onSwitch(button.dataset.tab);
+  });
+}
+
+setupTabs("input-tabs", (tab) => {
+  if (tab === "form-tab") jsonToForm();
+  else formToJson();
+  state.inputTab = tab;
+  $(tab).classList.remove("hidden");
+});
+
+setupTabs("output-tabs", (tab) => {
+  state.outputTab = tab;
+  if (state.result) $(tab).classList.remove("hidden");
+});
+
+function addSpecRow(key = "", value = "") {
+  const row = el("div", null, "spec-row");
+  const keyInput = el("input");
+  keyInput.type = "text"; keyInput.placeholder = "характеристика"; keyInput.value = key;
+  const valueInput = el("input");
+  valueInput.type = "text"; valueInput.placeholder = "значение"; valueInput.value = value;
+  const remove = el("button", "×", "small");
+  remove.title = "Удалить";
+  remove.addEventListener("click", () => row.remove());
+  row.append(keyInput, valueInput, remove);
+  $("spec-rows").append(row);
+}
+$("add-spec").addEventListener("click", () => addSpecRow());
+
+function readForm() {
+  const specs = {};
+  for (const row of $("spec-rows").children) {
+    const [key, value] = row.querySelectorAll("input");
+    if (key.value.trim()) specs[key.value.trim()] = value.value.trim();
+  }
+  return {
+    name: $("f-name").value.trim(),
+    manufacturer: $("f-manufacturer").value.trim(),
+    specs,
+    description: $("f-description").value.trim(),
+  };
+}
+
+function jsonToForm() {
+  let data;
+  try { data = JSON.parse($("json-input").value || "{}"); } catch { return; }
+  $("f-name").value = data.name || "";
+  $("f-manufacturer").value = data.manufacturer || "";
+  $("f-description").value = data.description || "";
+  $("spec-rows").replaceChildren();
+  const specs = data.specs && typeof data.specs === "object" && !Array.isArray(data.specs) ? data.specs : {};
+  for (const [key, value] of Object.entries(specs)) addSpecRow(key, String(value));
+  if (!Object.keys(specs).length) addSpecRow();
+}
+
+function formToJson() {
+  if (state.inputTab !== "form-tab") return;
+  let previous = {};
+  try { previous = JSON.parse($("json-input").value || "{}"); } catch { previous = {}; }
+  $("json-input").value = JSON.stringify({ ...previous, ...readForm() }, null, 2);
+}
+
+async function loadExample(name) {
+  const response = await fetch(`/examples/${name}`);
+  $("json-input").value = await response.text();
+  if (state.inputTab === "form-tab") jsonToForm();
+}
+for (const button of document.querySelectorAll("[data-example]")) {
+  button.addEventListener("click", () => loadExample(button.dataset.example));
+}
+
+function showError(message) {
+  $("error").replaceChildren(el("strong", "Ошибка: "), document.createTextNode(message));
+  $("error").classList.remove("hidden");
+}
+
+async function generate() {
+  $("error").classList.add("hidden");
+  const body = state.inputTab === "form-tab" ? JSON.stringify(readForm()) : $("json-input").value;
+  const button = $("generate");
+  button.disabled = true;
+  button.textContent = "Генерация…";
+  try {
+    const response = await fetch(`/generate?judge=${$("judge").checked}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body,
+    });
+    const data = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+    if (!response.ok) {
+      showError(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+      return;
+    }
+    state.result = data;
+    renderResult(data);
+  } catch (error) {
+    showError(`сервер недоступен (${error.message})`);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Сгенерировать";
+  }
+}
+$("generate").addEventListener("click", generate);
+
+function copyText(text, button) {
+  navigator.clipboard.writeText(text).then(() => {
+    const label = button.textContent;
+    button.textContent = "Скопировано";
+    setTimeout(() => { button.textContent = label; }, 1200);
+  });
+}
+for (const button of document.querySelectorAll("[data-copy]")) {
+  button.addEventListener("click", () => {
+    if (!state.result) return;
+    const text = button.dataset.copy === "markdown"
+      ? state.result.markdown : JSON.stringify(state.result.card, null, 2);
+    copyText(text, button);
+  });
+}
+
+function textField(title, text, counterText, isBad) {
+  const wrap = el("div");
+  const head = el("div", null, "field-head");
+  head.append(el("h2", title));
+  const right = el("div", null, "row");
+  right.style.margin = "0";
+  right.append(el("span", counterText, isBad ? "counter bad" : "counter"));
+  const copy = el("button", "Копировать", "small");
+  copy.addEventListener("click", () => copyText(text, copy));
+  right.append(copy);
+  head.append(right);
+  wrap.append(head, el("div", text, "text-box"));
+  return wrap;
+}
+
+function listBlock(className, title, items) {
+  const box = el("div", null, `note ${className}`);
+  box.append(el("h3", title));
+  const list = el("ul");
+  for (const item of items) list.append(el("li", item));
+  box.append(list);
+  return box;
+}
+
+function renderResult({ card, markdown }) {
+  $("placeholder").classList.add("hidden");
+  $("md-output").textContent = markdown;
+  $("json-output").textContent = JSON.stringify(card, null, 2);
+
+  const view = $("card-view");
+  view.replaceChildren();
+  const head = el("div", null, "row");
+  head.style.margin = "0 0 4px";
+  head.append(
+    el("span", card.status === "ok" ? "проверка пройдена" : "требует проверки", `status ${card.status}`),
+    el("span", `${card.product.name} · ${card.product.manufacturer || "производитель не указан"} · ${card.device_type}`, "muted"),
+  );
+  view.append(head);
+
+  const titleLen = [...card.seo_title].length;
+  const descLen = [...card.seo_description].length;
+  view.append(textField("SEO-заголовок", card.seo_title, `${titleLen} / 70`, titleLen > 70));
+  view.append(textField("SEO-описание", card.seo_description, `${descLen} симв. (800–1200)`,
+    descLen < 800 || descLen > 1200));
+
+  view.append(el("h2", "Ключевые характеристики"));
+  const table = el("table");
+  const headerRow = el("tr");
+  for (const caption of ["Характеристика", "Значение", "Источник"]) headerRow.append(el("th", caption));
+  table.append(headerRow);
+  const sourceLabels = { specs: "характеристики", description: "описание", missing: "" };
+  for (const spec of card.key_specs) {
+    const row = el("tr");
+    row.append(el("td", spec.name));
+    row.append(el("td", spec.value, spec.source === "missing" ? "nodata" : ""));
+    row.append(el("td", sourceLabels[spec.source], "source"));
+    table.append(row);
+  }
+  view.append(table);
+
+  view.append(el("h2", "Поисковые запросы"));
+  const queries = el("ul");
+  for (const query of card.search_queries) queries.append(el("li", query));
+  view.append(queries);
+
+  const block = card.commercial_block;
+  view.append(el("h2", "Для менеджера"));
+  view.append(el("p", `Кому подходит: ${block.audience}`));
+  const tasks = el("ul");
+  for (const task of block.tasks) tasks.append(el("li", task));
+  view.append(tasks);
+  view.append(el("p", `Типовое применение приборов этого класса: ${block.typical_applications_note}`, "muted"));
+
+  const toClarify = [
+    ...card.missing_fields.map((m) => `Нет данных: ${m.field}${m.importance === "critical" ? " (критично)" : ""}`),
+    ...card.clarifications,
+  ];
+  if (toClarify.length) view.append(listBlock("warn", "Требует уточнения", toClarify));
+  if (card.warnings.length) view.append(listBlock("err", "Замечания проверки", card.warnings));
+
+  const meta = card.meta;
+  const cost = meta.cost_usd ? ` · $${meta.cost_usd.toFixed(4)}` : "";
+  view.append(el("p", `Модель: ${meta.model} · попыток: ${meta.attempts} · ${(meta.latency_ms / 1000).toFixed(1)} с${cost}`, "muted"));
+
+  for (const id of ["card-view", "md-view", "json-view"]) $(id).classList.add("hidden");
+  $(state.outputTab).classList.remove("hidden");
+}
+
+fetch("/health").then((r) => r.json()).then((h) => {
+  $("health").textContent = `Модель: ${h.provider} / ${h.model}`;
+}).catch(() => {});
+loadExample("manometer_dm02.json");
+</script>
+</body>
+</html>

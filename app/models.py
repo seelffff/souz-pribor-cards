@@ -147,6 +147,7 @@ class Meta(BaseModel):
     tokens: int
     cost_usd: float | None = None
     violation_counts: dict[str, int] = Field(default_factory=dict)
+    violations_by_attempt: list[list[str]] = Field(default_factory=list)
 
 
 class Card(BaseModel):
