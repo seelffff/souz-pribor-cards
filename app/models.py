@@ -55,6 +55,9 @@ def _spec_pair(item) -> tuple:
 _JSON_ERRORS = {
     "Expecting property name enclosed in double quotes": "ожидается имя поля в кавычках "
     "(лишняя запятая?)",
+    # Python 3.13+ сообщает о висячей запятой отдельным текстом.
+    "Illegal trailing comma before end of object": "лишняя запятая перед закрывающей скобкой",
+    "Illegal trailing comma before end of array": "лишняя запятая перед закрывающей скобкой",
     "Expecting ',' delimiter": "пропущена запятая",
     "Expecting ':' delimiter": "пропущено двоеточие",
     "Expecting value": "ожидается значение",
@@ -74,7 +77,7 @@ def parse_product_json(raw: str | bytes) -> ProductInput:
         try:
             raw = raw.decode("utf-8-sig")
         except UnicodeDecodeError as exc:
-            raise InputError("Файл не в кодировке UTF-8 — пересохраните его в UTF-8") from exc
+            raise InputError("Данные не в кодировке UTF-8 — сохраните JSON в UTF-8") from exc
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:

@@ -118,8 +118,6 @@ class Violation:
 
 @dataclass
 class SourceContext:
-    """Всё, что считается подтверждённым входными данными."""
-
     tokens: Tokens
     corpus: str
     description: str

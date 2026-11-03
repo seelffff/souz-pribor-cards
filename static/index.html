@@ -198,7 +198,13 @@ function jsonToForm() {
   $("f-manufacturer").value = data.manufacturer || "";
   $("f-description").value = data.description || "";
   $("spec-rows").replaceChildren();
-  const specs = data.specs && typeof data.specs === "object" && !Array.isArray(data.specs) ? data.specs : {};
+  let specs = data.specs && typeof data.specs === "object" ? data.specs : {};
+  // specs можно передать и списком: [["класс точности", "1,5"]] или [{"name": ..., "value": ...}]
+  if (Array.isArray(specs)) {
+    specs = Object.fromEntries(
+      specs.map((item) => (Array.isArray(item) ? item : [item?.name, item?.value])).filter(([key]) => key)
+    );
+  }
   for (const [key, value] of Object.entries(specs)) addSpecRow(key, String(value));
   if (!Object.keys(specs).length) addSpecRow();
 }

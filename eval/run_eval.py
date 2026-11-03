@@ -75,10 +75,9 @@ def _mean(values: list[float]) -> float:
     return statistics.mean(values) if values else 0.0
 
 
-def render_table(rows: list[dict], model: str, runs: int, prompt_version: str) -> str:
+def render_table(rows: list[dict], model: str, runs: int) -> str:
     lines = [
-        f"Модель `{model}`, промпт {prompt_version}, {runs} прогонов на пример, "
-        f"{datetime.date.today():%d.%m.%Y}.",
+        f"Модель `{model}`, {runs} прогонов на пример, {datetime.date.today():%d.%m.%Y}.",
         "",
         "| Пример | ok с 1-й попытки | ok после repair | ср. вызовов | поймано выдумок | "
         "прочие замечания | ср. длина описания | ср. время, с | ср. цена, $ | ловушка |",
@@ -99,13 +98,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--examples", default=",".join(EXAMPLES))
-    parser.add_argument("--prompt-version", default="v3")
-    parser.add_argument("--out", type=Path, default=ROOT / "eval" / "results.md")
+    parser.add_argument("--out", type=Path)
     args = parser.parse_args()
+    out = args.out or ROOT / "eval" / "results.md"
 
     load_dotenv()
     logging.basicConfig(level=logging.WARNING)
     llm = provider_from_env()
+    if llm.name == "mock" and not args.out:
+        parser.error("на mock замеры не имеют смысла: задайте LLM_PROVIDER=openai_compat или --out")
     names = args.examples.split(",")
     products = {
         n: parse_product_json(
@@ -121,10 +122,10 @@ def main() -> None:
         summarize(n, [r for r in results if r["example"] == n], injected_tokens(products[n]))
         for n in names
     ]
-    table = render_table(rows, llm.model, args.runs, args.prompt_version)
+    table = render_table(rows, llm.model, args.runs)
     print(table)
-    args.out.write_text(table + "\n", encoding="utf-8")
-    raw = args.out.with_suffix(".jsonl")
+    out.write_text(table + "\n", encoding="utf-8")
+    raw = out.with_suffix(".jsonl")
     raw.write_text(
         "\n".join(json.dumps(r, ensure_ascii=False) for r in results) + "\n", encoding="utf-8"
     )

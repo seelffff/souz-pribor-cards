@@ -23,23 +23,13 @@ _PADDING = [
 
 
 class MockProvider:
-    """Детерминированный ответ без сети. С replies отдаёт заранее заданные ответы (для тестов)."""
+    """Детерминированный ответ без сети, чтобы сервис работал без ключа."""
 
     name = "mock"
     model = "mock"
 
-    def __init__(self, replies: list | None = None):
-        self.replies = list(replies) if replies is not None else None
-        self.calls: list[list[dict]] = []
-
     def complete_json(self, messages: list[dict], schema: dict) -> LLMReply:
-        if self.replies is not None:
-            self.calls.append(messages)
-            reply = self.replies.pop(0)
-            if isinstance(reply, Exception):
-                raise reply
-            data = reply
-        elif "claims" in schema.get("properties", {}):
+        if "claims" in schema.get("properties", {}):
             data = {"claims": []}
         else:
             data = _draft_from_prompt(messages)
