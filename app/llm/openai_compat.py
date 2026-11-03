@@ -25,7 +25,7 @@ class OpenAICompatProvider:
         model: str,
         temperature: float = 0.2,
         timeout: float = 60,
-        max_tokens: int = 4000,
+        max_tokens: int = 8000,
         response_format: str = "json_schema",
         reasoning_effort: str | None = None,
         retry_delays: tuple[float, ...] = (1, 3, 8),
@@ -52,11 +52,11 @@ class OpenAICompatProvider:
         response = self._create_with_retries(messages, schema)
         choice = response.choices[0]
         content = choice.message.content
+        if choice.finish_reason == "length":
+            raise LLMResponseError(
+                "Ответ модели обрезан по LLM_MAX_TOKENS — увеличьте лимит в .env"
+            )
         if not content:
-            if choice.finish_reason == "length":
-                raise LLMResponseError(
-                    "Ответ модели обрезан по LLM_MAX_TOKENS — увеличьте лимит в .env"
-                )
             raise LLMResponseError("Модель вернула пустой ответ")
         usage = response.usage
         return LLMReply(

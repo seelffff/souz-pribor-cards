@@ -43,7 +43,7 @@ def provider_from_env() -> LLMProvider:
             model=os.getenv("LLM_MODEL", "deepseek/deepseek-v4.1-flash"),
             temperature=float(os.getenv("LLM_TEMPERATURE", "0.2")),
             timeout=float(os.getenv("LLM_TIMEOUT", "60")),
-            max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4000")),
+            max_tokens=int(os.getenv("LLM_MAX_TOKENS", "8000")),
             response_format=os.getenv("LLM_RESPONSE_FORMAT", "json_schema"),
             reasoning_effort=os.getenv("LLM_REASONING_EFFORT") or None,
         )

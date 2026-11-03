@@ -109,6 +109,20 @@ class Draft(BaseModel):
     clarifications: list[str]
 
 
+class JudgeClaim(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    claim: str
+    verdict: Literal["supported", "generic", "unsupported"]
+    quote: str
+
+
+class JudgeVerdict(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    claims: list[JudgeClaim]
+
+
 class KeySpec(BaseModel):
     name: str
     value: str

@@ -126,6 +126,8 @@ def normalize_key(key: str) -> str:
 def unit_from_key(key: str) -> str | None:
     """'Диаметр корпуса (мм)' -> 'мм': в таблицах магазина единица часто стоит в названии поля."""
     match = re.search(r"\(([^)]*)\)", key)
-    if match and normalize_text(match.group(1)) in _UNIT_CANON:
-        return match.group(1)
-    return None
+    return canonical_unit(match.group(1)) if match else None
+
+
+def canonical_unit(unit: str) -> str | None:
+    return _UNIT_CANON.get(normalize_text(unit))
