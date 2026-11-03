@@ -22,6 +22,7 @@ from app.validators import (
     build_source_context,
     check_facts,
     find_input_issues,
+    text_fields,
     validate_draft,
 )
 
@@ -172,8 +173,9 @@ def generate_card(
 
 def run_judge(llm: LLMProvider, product: ProductInput, draft: Draft, usage: Usage) -> list[str]:
     """Вторая фаза проверки: модель-судья ищет смысловые выдумки, которые не ловит код."""
-    block = draft.commercial_block
-    draft_text = "\n\n".join([draft.seo_title, draft.seo_description, block.audience, *block.tasks])
+    draft_text = "\n\n".join(
+        f"{name}:\n{text}" for name, text in text_fields(draft).items() if name != "clarifications"
+    )
     prompt = (
         load_prompt("judge")
         .replace("{product_json}", product_json(product))

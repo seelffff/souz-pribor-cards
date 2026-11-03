@@ -16,7 +16,7 @@ class ProductInput(BaseModel):
     type: str = ""
     category: str = ""
     specs: dict[str, str] = Field(default_factory=dict)
-    description: str = ""
+    description: str = Field(default="", max_length=20_000)
 
     @field_validator("manufacturer", "type", "category", "description", mode="before")
     @classmethod
@@ -75,6 +75,9 @@ def _format_validation_error(exc: ValidationError) -> str:
             messages.append(f"{field}: обязательное поле")
         elif error["type"] == "string_too_short":
             messages.append(f"{field}: поле пустое")
+        elif error["type"] == "string_too_long":
+            limit = error["ctx"]["max_length"]
+            messages.append(f"{field}: слишком длинный текст (больше {limit} символов)")
         else:
             messages.append(f"{field}: {error['msg'].removeprefix('Value error, ')}")
     return "Ошибка во входных данных: " + "; ".join(messages)
