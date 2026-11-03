@@ -14,6 +14,9 @@ _PADDING = [
     "Наличие на складе, сроки отгрузки и условия доставки менеджер подтвердит вместе со счётом.",
     "Если нужна замена установленного прибора, пришлите его маркировку или фото шильдика: "
     "менеджер подберёт вариант по параметрам.",
+    "Если прибор нужен для замены, укажите в запросе место установки и рабочие условия: "
+    "это поможет сверить модификацию до отгрузки.",
+    "Счёт и сопроводительные документы менеджер пришлёт вместе с коммерческим предложением.",
     "Это черновой текст: он собран без обращения к языковой модели и нужен для проверки "
     "работы сервиса без ключа доступа.",
 ]
@@ -30,14 +33,16 @@ class MockProvider:
         self.calls: list[list[dict]] = []
 
     def complete_json(self, messages: list[dict], schema: dict) -> LLMReply:
-        self.calls.append(messages)
-        if self.replies is None:
-            data = _draft_from_prompt(messages)
-        else:
+        if self.replies is not None:
+            self.calls.append(messages)
             reply = self.replies.pop(0)
             if isinstance(reply, Exception):
                 raise reply
             data = reply
+        elif "claims" in schema.get("properties", {}):
+            data = {"claims": []}
+        else:
+            data = _draft_from_prompt(messages)
         return LLMReply(data=data, tokens=0, cost_usd=0.0, latency_ms=0)
 
 
@@ -68,11 +73,16 @@ def _draft_from_prompt(messages: list[dict]) -> dict:
     return {
         "seo_title": title,
         "seo_description": " ".join(parts),
-        "search_queries": [
-            name.lower(),
-            f"{short} {manufacturer}".lower().strip(),
-            f"{short} купить",
-        ],
+        "search_queries": list(
+            dict.fromkeys(
+                [
+                    name.lower(),
+                    f"{short} {manufacturer}".lower().strip(),
+                    f"{short} купить",
+                    f"{short} цена",
+                ]
+            )
+        )[:4],
         "commercial_block": {
             "audience": "Инженеры КИПиА, службы главного механика, отделы снабжения",
             "tasks": [

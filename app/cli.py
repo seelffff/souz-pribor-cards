@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from app.generator import generate_card
 from app.llm.base import LLMError, provider_from_env
-from app.models import InputError, ProductInput, parse_product_json
+from app.models import Card, InputError, ProductInput, parse_product_json
 from app.render import render_markdown
 from app.yml import offer_to_product
 
@@ -43,25 +43,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         product = load_product(args)
         card = generate_card(product, provider_from_env(), judge=args.judge)
+        write_output(card, args)
     except OSError as exc:
-        print(f"Не удалось прочитать файл: {exc}", file=sys.stderr)
+        print(f"Не удалось открыть или записать {exc.filename}: {exc.strerror}", file=sys.stderr)
         return 2
     except InputError as exc:
-        print(f"Ошибка входных данных: {exc}", file=sys.stderr)
+        print(exc, file=sys.stderr)
         return 2
     except LLMError as exc:
         print(f"Ошибка LLM: {exc}", file=sys.stderr)
         return 1
-
-    output = render_markdown(card) if args.format == "md" else card.model_dump_json(indent=2)
-    if args.out_dir:
-        stem = args.input.stem if args.command == "generate" else f"offer_{args.offer_id}"
-        (args.out_dir / f"{stem}.json").write_text(card.model_dump_json(indent=2) + "\n", "utf-8")
-        (args.out_dir / f"{stem}.md").write_text(render_markdown(card), "utf-8")
-    elif args.out:
-        args.out.write_text(output + "\n", encoding="utf-8")
-    else:
-        print(output)
     if card.status == "needs_review":
         print("Карточка требует проверки: см. раздел замечаний.", file=sys.stderr)
     return 0
@@ -69,8 +60,23 @@ def main(argv: list[str] | None = None) -> int:
 
 def load_product(args: argparse.Namespace) -> ProductInput:
     if args.command == "generate":
-        return parse_product_json(args.input.read_text(encoding="utf-8"))
+        return parse_product_json(args.input.read_bytes())
     product = offer_to_product(args.feed, args.offer_id)
     if args.save_input:
         args.save_input.write_text(product.model_dump_json(indent=2) + "\n", encoding="utf-8")
     return product
+
+
+def write_output(card: Card, args: argparse.Namespace) -> None:
+    if args.out_dir:
+        args.out_dir.mkdir(parents=True, exist_ok=True)
+        stem = args.input.stem if args.command == "generate" else f"offer_{args.offer_id}"
+        (args.out_dir / f"{stem}.json").write_text(card.model_dump_json(indent=2) + "\n", "utf-8")
+        (args.out_dir / f"{stem}.md").write_text(render_markdown(card), "utf-8")
+        return
+    output = render_markdown(card) if args.format == "md" else card.model_dump_json(indent=2)
+    if args.out:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(output + "\n", encoding="utf-8")
+    else:
+        print(output)

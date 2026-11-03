@@ -52,12 +52,35 @@ def _spec_pair(item) -> tuple:
     raise ValueError(f"не удалось разобрать элемент specs: {item!r}")
 
 
+_JSON_ERRORS = {
+    "Expecting property name enclosed in double quotes": "ожидается имя поля в кавычках "
+    "(лишняя запятая?)",
+    "Expecting ',' delimiter": "пропущена запятая",
+    "Expecting ':' delimiter": "пропущено двоеточие",
+    "Expecting value": "ожидается значение",
+    "Unterminated string starting at": "незакрытая строка",
+    "Extra data": "лишние данные после JSON",
+}
+_FIELD_ERRORS = {
+    "missing": "обязательное поле",
+    "string_too_short": "поле пустое",
+    "string_type": "ожидается строка",
+    "dict_type": "ожидается объект",
+}
+
+
 def parse_product_json(raw: str | bytes) -> ProductInput:
+    if isinstance(raw, bytes):
+        try:
+            raw = raw.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise InputError("Файл не в кодировке UTF-8 — пересохраните его в UTF-8") from exc
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
+        reason = _JSON_ERRORS.get(exc.msg, exc.msg)
         raise InputError(
-            f"Некорректный JSON: {exc.msg} (строка {exc.lineno}, столбец {exc.colno})"
+            f"Некорректный JSON: {reason} (строка {exc.lineno}, столбец {exc.colno})"
         ) from exc
     if not isinstance(data, dict):
         raise InputError("Ожидается JSON-объект с полями name, manufacturer, specs, description")
@@ -71,10 +94,8 @@ def _format_validation_error(exc: ValidationError) -> str:
     messages = []
     for error in exc.errors():
         field = ".".join(str(part) for part in error["loc"]) or "вход"
-        if error["type"] == "missing":
-            messages.append(f"{field}: обязательное поле")
-        elif error["type"] == "string_too_short":
-            messages.append(f"{field}: поле пустое")
+        if error["type"] in _FIELD_ERRORS:
+            messages.append(f"{field}: {_FIELD_ERRORS[error['type']]}")
         elif error["type"] == "string_too_long":
             limit = error["ctx"]["max_length"]
             messages.append(f"{field}: слишком длинный текст (больше {limit} символов)")

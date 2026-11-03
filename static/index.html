@@ -187,7 +187,13 @@ function readForm() {
 
 function jsonToForm() {
   let data;
-  try { data = JSON.parse($("json-input").value || "{}"); } catch { return; }
+  try {
+    data = JSON.parse($("json-input").value || "{}");
+  } catch (error) {
+    showError(`JSON на вкладке «JSON» не разобран, форма не обновлена (${error.message})`);
+    return;
+  }
+  $("error").classList.add("hidden");
   $("f-name").value = data.name || "";
   $("f-manufacturer").value = data.manufacturer || "";
   $("f-description").value = data.description || "";
@@ -197,11 +203,16 @@ function jsonToForm() {
   if (!Object.keys(specs).length) addSpecRow();
 }
 
-function formToJson() {
-  if (state.inputTab !== "form-tab") return;
+// Форма редактирует только часть полей: type и category из JSON (так приходят офферы фида) сохраняются.
+function formWithJsonFields() {
   let previous = {};
   try { previous = JSON.parse($("json-input").value || "{}"); } catch { previous = {}; }
-  $("json-input").value = JSON.stringify({ ...previous, ...readForm() }, null, 2);
+  return { ...previous, ...readForm() };
+}
+
+function formToJson() {
+  if (state.inputTab !== "form-tab") return;
+  $("json-input").value = JSON.stringify(formWithJsonFields(), null, 2);
 }
 
 async function loadExample(name) {
@@ -220,7 +231,7 @@ function showError(message) {
 
 async function generate() {
   $("error").classList.add("hidden");
-  const body = state.inputTab === "form-tab" ? JSON.stringify(readForm()) : $("json-input").value;
+  const body = state.inputTab === "form-tab" ? JSON.stringify(formWithJsonFields()) : $("json-input").value;
   const button = $("generate");
   button.disabled = true;
   button.textContent = "Генерация…";

@@ -203,21 +203,22 @@ def _optional_tokens(values: list[str]) -> Tokens:
 
 def _split_optional(segment: str) -> tuple[list[str], list[str]]:
     """'IP40 (по заказу IP53)', 'IP54 - по заказу', 'IP40, по заказу IP54' -> (опции, базовое)."""
-    optional, base = [], []
-
-    def take_paren(match: re.Match) -> str:
-        inner = match.group(1)
+    optional, base, outside = [], [], []
+    position = 0
+    for paren in re.finditer(r"\(([^()]*)\)", segment):
+        outside.append(segment[position : paren.start()])
+        position = paren.end()
+        inner = paren.group(1)
+        values = _OPTIONAL_MARK.sub(" ", inner)
         if not _OPTIONAL_MARK.search(inner):
             base.append(inner)
-            return " "
-        rest = _OPTIONAL_MARK.sub(" ", inner)
-        if re.search(r"\d", rest):
-            optional.append(rest)
-            return " "
-        # «IP54 (по заказу)» — пометка относится к значению перед скобкой.
-        return " по заказу "
-
-    segment = re.sub(r"\(([^()]*)\)", take_paren, segment)
+        elif re.search(r"\d", values):
+            optional.append(values)
+        else:
+            # «IP54 (по заказу)» — пометка относится к значению перед скобкой.
+            outside.append(" по заказу ")
+    outside.append(segment[position:])
+    segment = "".join(outside)
     # «1.0 - по заказу, кроме МП3-У на 0.6 кгс/см²»: после «кроме» — исключение, не опция.
     segment, _, exception = segment.partition("кроме")
     base.append(exception)
@@ -326,12 +327,8 @@ def _sign_variants(number: str) -> list[str]:
 
 def _code_allowed(code: str, allowed: set[str]) -> bool:
     # «G1/2» допустимо при «G1/2-B» во входе, «ПД100» при «ПД100-ДИ0,6», а «ПД10» и «G1» — нет.
-    key, letters = fold_code(code), fold_letters(code)
-    return any(
-        fold_code(a) == key
-        or (fold_letters(a).startswith(letters) and a[len(code) : len(code) + 1] == "-")
-        for a in allowed
-    )
+    key, prefix = fold_code(code), fold_letters(code) + "-"
+    return any(fold_code(a) == key or fold_letters(a).startswith(prefix) for a in allowed)
 
 
 def find_unknown_terms(text: str, source: SourceContext, field_name: str) -> list[Violation]:

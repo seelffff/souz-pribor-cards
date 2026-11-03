@@ -78,6 +78,7 @@ _NUMBER_IN_GROUP = re.compile(
 )
 _STANDARD = re.compile(r"\b(?:гост|ост|ту|din|en|iso)(?:\s+р)?\s+\d[\d.\-]*\d")
 _WORD_WITH_DIGITS = re.compile(r"[\w./-]+")
+_LATIN_MODEL = re.compile(r"\b([a-z]{1,5}) (\d[\d./]*\d|\d)(?![\w])")
 # Кириллица и латиница в кодах выглядят одинаково, а модель почти всегда пишет «134a» латиницей.
 _HOMOGLYPHS = str.maketrans("авекмнорстух", "abekmhopctyx")
 
@@ -156,26 +157,16 @@ def extract_tokens(text: str) -> Tokens:
 
     # «DM 02», «WIKA 111.10» — обозначение модели, а не число: иначе в «DM 02 – 0–1,6 МПа»
     # номер модели склеивается с диапазоном в пару «2 МПа».
-    def take_latin_model(match: re.Match) -> str:
-        if match.group(1) in _UNIT_CANON:
-            return match.group()
-        tokens.codes.add(match.group(1) + match.group(2))
-        return " "
-
-    text = re.sub(r"\b([a-z]{1,5}) (\d[\d./]*\d|\d)(?![\w])", take_latin_model, text)
+    models = [m for m in _LATIN_MODEL.finditer(text) if m.group(1) not in _UNIT_CANON]
+    tokens.codes.update(m.group(1) + m.group(2) for m in models)
+    text = _blank_out(text, models)
 
     # Числа внутри кодов (ПД100-ДИ0,6) не считаются самостоятельными значениями,
     # иначе «расшифровка» кода заказа прошла бы проверку.
-    def take_code(match: re.Match) -> str:
-        word = match.group().strip("./-")
-        if word in _UNIT_CANON or not _is_code(word):
-            return match.group()
-        # «IP40/IP54», «У2/Т2» — перечисление; в «G1/2» после слеша цифра, это одна резьба.
-        parts = re.split(r"/(?=[^\W\d_])", word)
-        tokens.codes.update(parts if all(_is_code(p) for p in parts) else [word])
-        return " "
-
-    text = _WORD_WITH_DIGITS.sub(take_code, text)
+    codes = [m for m in _WORD_WITH_DIGITS.finditer(text) if _is_code_word(m.group().strip("./-"))]
+    for match in codes:
+        tokens.codes.update(_split_codes(match.group().strip("./-")))
+    text = _blank_out(text, codes)
 
     for match in _QUANTITY.finditer(text):
         unit = match.group("unit")
@@ -197,6 +188,22 @@ def extract_tokens(text: str) -> Tokens:
 
 def _is_code(word: str) -> bool:
     return bool(re.search(r"\d", word) and re.search(r"[^\W\d_]", word))
+
+
+def _is_code_word(word: str) -> bool:
+    return word not in _UNIT_CANON and _is_code(word)
+
+
+def _split_codes(word: str) -> list[str]:
+    # «IP40/IP54», «У2/Т2» — перечисление; в «G1/2» после слеша цифра, это одна резьба.
+    parts = re.split(r"/(?=[^\W\d_])", word)
+    return parts if all(_is_code(p) for p in parts) else [word]
+
+
+def _blank_out(text: str, matches: list[re.Match]) -> str:
+    for match in reversed(matches):
+        text = text[: match.start()] + " " + text[match.end() :]
+    return text
 
 
 def normalize_key(key: str) -> str:

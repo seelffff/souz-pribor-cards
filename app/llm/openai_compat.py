@@ -9,8 +9,6 @@ from app.llm.base import LLMError, LLMReply, LLMResponseError
 
 log = logging.getLogger(__name__)
 
-_RETRYABLE = (openai.APITimeoutError, openai.APIConnectionError, openai.RateLimitError)
-
 
 class OpenAICompatProvider:
     """OpenAI, OpenRouter, DeepSeek, Ollama — всё, что понимает /chat/completions."""
@@ -32,13 +30,14 @@ class OpenAICompatProvider:
         http_client=None,
     ):
         self.model = model
+        self.base_url = base_url
         self.temperature = temperature
         self.timeout = timeout
         self.max_tokens = max_tokens
         self.response_format = response_format
         self.reasoning_effort = reasoning_effort
         self.retry_delays = retry_delays
-        # Повторы делаем сами: SDK не различает 429 и 401 в сообщениях для пользователя.
+        # Повторы делаем сами: свои паузы и понятные сообщения на каждый вид ошибки.
         self.client = openai.OpenAI(
             base_url=base_url,
             api_key=api_key,
@@ -50,6 +49,9 @@ class OpenAICompatProvider:
     def complete_json(self, messages: list[dict], schema: dict) -> LLMReply:
         started = time.monotonic()
         response = self._create_with_retries(messages, schema)
+        # OpenRouter при сбое у провайдера может ответить 200 с {"error": ...} вместо choices.
+        if not getattr(response, "choices", None):
+            raise LLMResponseError("Провайдер вернул ответ без текста модели")
         choice = response.choices[0]
         content = choice.message.content
         if choice.finish_reason == "length":
@@ -89,8 +91,15 @@ class OpenAICompatProvider:
                     + json.dumps(schema, ensure_ascii=False),
                 },
             ]
+        extra_body = {}
+        if "openrouter.ai" in self.base_url:
+            # Иначе OpenRouter может отправить запрос провайдеру, который не соблюдает
+            # JSON schema: у deepseek-v4.1-flash таких 7 эндпоинтов из 41.
+            extra_body["provider"] = {"require_parameters": True}
         if self.reasoning_effort:
-            kwargs["extra_body"] = {"reasoning": {"effort": self.reasoning_effort}}
+            extra_body["reasoning"] = {"effort": self.reasoning_effort}
+        if extra_body:
+            kwargs["extra_body"] = extra_body
 
         for attempt, delay in enumerate((*self.retry_delays, None), start=1):
             try:
@@ -104,11 +113,13 @@ class OpenAICompatProvider:
             except openai.APIStatusError as exc:
                 if exc.status_code == 402:
                     raise LLMError("Недостаточно средств на счёте провайдера (402)") from exc
-                if exc.status_code < 500 and not isinstance(exc, openai.RateLimitError):
+                if exc.status_code != 429 and exc.status_code < 500:
                     raise LLMError(f"Запрос отклонён ({exc.status_code}): {_detail(exc)}") from exc
                 error = exc
-            except _RETRYABLE as exc:
+            except openai.APIConnectionError as exc:  # в том числе таймаут
                 error = exc
+            except openai.APIError as exc:
+                raise LLMError(f"Некорректный ответ LLM API: {type(exc).__name__}") from exc
             if delay is None:
                 break
             log.warning("LLM: %s, повтор %d через %.0f с", type(error).__name__, attempt, delay)

@@ -1,5 +1,3 @@
-"""Мини-оценка: каждый пример N раз через настоящую модель, метрики — в Markdown-таблицу."""
-
 import argparse
 import datetime
 import json
@@ -36,19 +34,12 @@ def injected_tokens(product: ProductInput) -> set[str]:
 
 
 def leaked(card: Card, tokens: set[str]) -> set[str]:
-    found = extract_tokens(" ".join(text_fields_of(card)))
-    return tokens & (found.codes | {f"{n} {u}" for n, u in found.quantities})
-
-
-def text_fields_of(card: Card) -> list[str]:
+    """Значения из фразы-инструкции в любом тексте карточки, кроме замечаний проверки."""
     block = card.commercial_block
-    return [
-        card.seo_title,
-        card.seo_description,
-        *card.search_queries,
-        block.audience,
-        *block.tasks,
-    ]
+    texts = [card.seo_title, card.seo_description, *card.search_queries, block.audience]
+    texts += [*block.tasks, block.typical_applications_note, *card.clarifications]
+    found = extract_tokens(" ".join(texts))
+    return tokens & (found.codes | {f"{n} {u}" for n, u in found.quantities})
 
 
 def run_once(name: str, product: ProductInput, llm: LLMProvider) -> dict:
@@ -108,7 +99,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--examples", default=",".join(EXAMPLES))
-    parser.add_argument("--prompt-version", default="v2")
+    parser.add_argument("--prompt-version", default="v3")
     parser.add_argument("--out", type=Path, default=ROOT / "eval" / "results.md")
     args = parser.parse_args()
 
