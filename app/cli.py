@@ -29,6 +29,7 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--format", choices=["md", "json"], default="md")
         command.add_argument("--judge", action="store_true", help="доп. проверка LLM-судьёй")
         command.add_argument("--out", type=Path, help="записать в файл вместо stdout")
+        command.add_argument("--out-dir", type=Path, help="записать <имя>.json и <имя>.md в папку")
 
     args = parser.parse_args(argv)
     load_dotenv()
@@ -53,7 +54,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     output = render_markdown(card) if args.format == "md" else card.model_dump_json(indent=2)
-    if args.out:
+    if args.out_dir:
+        stem = args.input.stem if args.command == "generate" else f"offer_{args.offer_id}"
+        (args.out_dir / f"{stem}.json").write_text(card.model_dump_json(indent=2) + "\n", "utf-8")
+        (args.out_dir / f"{stem}.md").write_text(render_markdown(card), "utf-8")
+    elif args.out:
         args.out.write_text(output + "\n", encoding="utf-8")
     else:
         print(output)
